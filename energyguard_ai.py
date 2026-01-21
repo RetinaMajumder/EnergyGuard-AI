@@ -1,12 +1,5 @@
-# =========================================================
-# EnergyGuard AI – 
-# Author: Retina Majumder
-# Purpose: Energy monitoring, continuous waste recovery,
-# AI-based alerting and recommendations with visualization
-# =========================================================
-
+import streamlit as st
 import matplotlib.pyplot as plt
-
 
 # ---------------- ENERGY RECORD ----------------
 class EnergyRecord:
@@ -17,7 +10,6 @@ class EnergyRecord:
         self.time_of_day = time_of_day  # Day / Night
         self.sunlight = sunlight        # Boolean
         self.temperature = temperature  # Celsius
-
 
 # ---------------- HISTORY MODULE ----------------
 class EnergyHistory:
@@ -37,7 +29,6 @@ class EnergyHistory:
         if not self.records:
             return None
         return self.records[-1].usage
-
 
 # ---------------- ANALYTICS MODULE ----------------
 class EnergyAnalytics:
@@ -72,7 +63,6 @@ class EnergyAnalytics:
         recovered = 0.80 * wasted          # Always ON
         remaining = wasted - recovered     # System efficiency
         return round(recovered, 2), round(remaining, 2)
-
 
 # ---------------- AI DECISION ENGINE ----------------
 class KeenAI:
@@ -121,96 +111,74 @@ class KeenAI:
 
         return reasons, actions, min(100, confidence)
 
+# ---------------- STREAMLIT APP ----------------
+st.set_page_config(page_title="EnergyGuard AI – Keen Edition V4", page_icon="⚡", layout="wide")
+st.title("⚡ EnergyGuard AI – Keen Edition V4")
+st.write("Monitor and optimize energy usage with AI-driven insights.")
 
-# ---------------- GRAPH MODULE ----------------
-class EnergyGraph:
-    @staticmethod
-    def plot(history):
-        if len(history.usage_log) < 2:
-            return
+# Persist history between entries
+if "history" not in st.session_state:
+    st.session_state.history = EnergyHistory()
 
-        plt.figure()
-        plt.plot(history.usage_log, label="Total Usage (kWh)")
-        plt.plot(history.recovered_log, label="Recovered Energy (kWh)")
-        plt.plot(history.remaining_log, label="Unrecovered Waste (kWh)")
+analytics = EnergyAnalytics()
+ai = KeenAI()
 
-        plt.xlabel("Monitoring Step")
-        plt.ylabel("Energy (kWh)")
-        plt.title("Continuous Waste Recovery Performance")
-        plt.legend()
-        plt.grid(True)
-        plt.show()
+# ---------------- INPUT FORM ----------------
+with st.form("energy_input"):
+    st.subheader("Enter Energy Data")
+    usage = st.number_input("Energy usage (kWh):", min_value=0.0, step=0.1)
+    expected = st.number_input("Expected usage (kWh):", min_value=0.0, step=0.1)
+    sector = st.selectbox("Sector:", ["Home", "Factory", "Power Plant"])
+    time_of_day = st.selectbox("Time of Day:", ["Day", "Night"])
+    sunlight = st.checkbox("Sunlight available?")
+    temperature = st.number_input("Temperature (°C):", step=0.1)
+    submitted = st.form_submit_button("Analyze Energy")
 
+if submitted:
+    record = EnergyRecord(usage, expected, sector, time_of_day, sunlight, temperature)
 
-# ---------------- DISPLAY ----------------
-class AlertDisplay:
-    @staticmethod
-    def show(alert, score):
-        print("\n========== ENERGY STATUS ==========")
-        if alert == "CRITICAL":
-            print("🔴 CRITICAL – Immediate optimization required")
-        elif alert == "WARNING":
-            print("🟡 WARNING – Efficiency dropping")
-        else:
-            print("🟢 NORMAL – System balanced")
-        print(f"⚡ Efficiency Score: {score}/100")
+    ratio = analytics.usage_ratio(record)
+    anomaly = analytics.detect_anomaly(record, st.session_state.history)
+    alert = analytics.alert_level(ratio, anomaly)
+    score = analytics.efficiency_score(ratio)
+    recovered = analytics.waste_recovery(record)
 
+    st.session_state.history.add(record, recovered[0], recovered[1])
 
-# ---------------- MAIN PROGRAM ----------------
-def main():
-    history = EnergyHistory()
-    analytics = EnergyAnalytics()
-    ai = KeenAI()
+    # ---------------- DISPLAY ALERT ----------------
+    st.subheader("🔔 Energy Status")
+    if alert == "CRITICAL":
+        st.error("🔴 CRITICAL – Immediate optimization required")
+    elif alert == "WARNING":
+        st.warning("🟡 WARNING – Efficiency dropping")
+    else:
+        st.success("🟢 NORMAL – System balanced")
 
-    print("\n=== EnergyGuard AI – Keen Edition V4 ===\n")
+    st.write(f"⚡ Efficiency Score: {score}/100")
 
-    while True:
-        try:
-            usage = float(input("Energy usage (kWh): "))
-            expected = float(input("Expected usage (kWh): "))
-            sector = input("Sector (Home / Factory / Power Plant): ")
-            time_of_day = input("Time (Day/Night): ")
-            sunlight = input("Sunlight available? (yes/no): ").lower() == "yes"
-            temperature = float(input("Temperature (°C): "))
+    # ---------------- AI DIAGNOSIS ----------------
+    reasons, actions, confidence = ai.analyze(record, ratio, anomaly, alert, recovered)
 
-            record = EnergyRecord(
-                usage, expected, sector, time_of_day, sunlight, temperature
-            )
+    st.subheader("🤖 AI Diagnosis")
+    for r in reasons:
+        st.write("•", r)
 
-            ratio = analytics.usage_ratio(record)
-            anomaly = analytics.detect_anomaly(record, history)
-            alert = analytics.alert_level(ratio, anomaly)
-            score = analytics.efficiency_score(ratio)
-            recovered = analytics.waste_recovery(record)
+    st.subheader("🛠️ AI Action Plan")
+    for level, act in actions:
+        st.write(f"[{level}] {act}")
 
-            history.add(record, recovered[0], recovered[1])
+    st.write(f"AI Confidence Level: {confidence}%")
 
-            AlertDisplay.show(alert, score)
-
-            reasons, actions, confidence = ai.analyze(
-                record, ratio, anomaly, alert, recovered
-            )
-
-            print("\n--- AI DIAGNOSIS ---")
-            for r in reasons:
-                print("•", r)
-
-            print("\n--- AI ACTION PLAN ---")
-            for level, act in actions:
-                print(f"[{level}] {act}")
-
-            print(f"\nAI Confidence Level: {confidence}%")
-
-            EnergyGraph.plot(history)
-
-            if input("\nAdd another entry? (yes/no): ").lower() != "yes":
-                print("\nSystem shutdown complete. Energy optimized ⚡")
-                break
-
-        except ValueError:
-            print("\n⚠️ Please enter valid numeric values.\n")
-
-
-# ---------------- RUN ----------------
-if __name__ == "__main__":
-    main()
+    # ---------------- PLOT ----------------
+    if len(st.session_state.history.usage_log) >= 2:
+        st.subheader("📈 Continuous Waste Recovery Performance")
+        fig, ax = plt.subplots()
+        ax.plot(st.session_state.history.usage_log, label="Total Usage (kWh)")
+        ax.plot(st.session_state.history.recovered_log, label="Recovered Energy (kWh)")
+        ax.plot(st.session_state.history.remaining_log, label="Unrecovered Waste (kWh)")
+        ax.set_xlabel("Monitoring Step")
+        ax.set_ylabel("Energy (kWh)")
+        ax.set_title("Continuous Waste Recovery Performance")
+        ax.legend()
+        ax.grid(True)
+        st.pyplot(fig)
